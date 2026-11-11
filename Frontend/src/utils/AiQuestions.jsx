@@ -4,19 +4,17 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
-import { LuPinOff } from "react-icons/lu";
-import { MdOutlinePushPin } from "react-icons/md";
+import { Pin, PinOff, ChevronDown } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import axios from "axios";
 import { useParams } from "react-router-dom";
-import { motion, AnimatePresence, LayoutGroup } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 
 const AiQuestions = () => {
   const param = useParams();
   const queryClient = useQueryClient();
 
-  // Fetch session details with questions
   const getSessionDetail = async () => {
     const res = await axios.get(
       `http://localhost:5000/api/v1/session/getMySessionById/${param.id}`,
@@ -33,7 +31,6 @@ const AiQuestions = () => {
     queryFn: getSessionDetail,
   });
 
-  // Toggle pin API
   const togglePinApi = async (id) => {
     const res = await axios.post(
       `http://localhost:5000/api/v1/question/toggleQuestion/${id}`,
@@ -52,71 +49,96 @@ const AiQuestions = () => {
       toast.success("Question pin status changed");
       queryClient.invalidateQueries({ queryKey: ["sessionDetail", param.id] });
     },
+    onError: (error) => {
+      toast.error(error.response?.data?.message || "Failed to update pin");
+    },
   });
-
-  const togglePin = (id) => {
-    mutation.mutate(id);
-  };
 
   if (isLoading) {
     return (
-      <div className="w-full flex items-center justify-center py-20">
-        <h1 className="text-xl md:text-2xl font-semibold text-gray-300">
-          Loading...
-        </h1>
+      <div className="space-y-3">
+        {[1, 2, 3].map((n) => (
+          <div
+            key={n}
+            className="h-16 animate-pulse rounded-xl border border-white/10 bg-white/5"
+          />
+        ))}
+      </div>
+    );
+  }
+
+  const questions = data?.session?.questions || [];
+
+  if (questions.length === 0) {
+    return (
+      <div className="rounded-2xl border border-dashed border-white/15 py-16 text-center">
+        <h3 className="text-lg font-semibold text-white">No questions yet</h3>
+        <p className="mt-1 text-slate-400">
+          Click "Generate AI Questions" to get started.
+        </p>
       </div>
     );
   }
 
   return (
-    <LayoutGroup>
-      <div className="mt-10 w-[60vw] mr-2.5 flex flex-col items-center gap-6">
-        <AnimatePresence>
-          {data?.session?.questions.map((item) => (
-            <motion.div
-              key={item._id}
-              layout
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 20 }}
-              transition={{ duration: 0.4, ease: "easeInOut" }}
-              className="w-full md:w-[70%] lg:w-[60%]" // parent responsive width
+    <Accordion type="single" collapsible className="space-y-3">
+      <AnimatePresence>
+        {questions.map((item) => (
+          <motion.div
+            key={item._id}
+            layout
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 16 }}
+            transition={{ duration: 0.3 }}
+          >
+            <AccordionItem
+              value={item._id}
+              className={`overflow-hidden rounded-xl border bg-white/5 backdrop-blur transition data-[state=open]:bg-white/10 ${
+                item.isPinned
+                  ? "border-cyan-400/50"
+                  : "border-white/10 hover:border-white/25"
+              }`}
             >
-              <Accordion type="single" collapsible>
-                <AccordionItem value={item._id}>
-                  <AccordionTrigger
-                    className="w-full bg-gradient-to-r from-[#2b3a6b] to-[#243d8d] text-white px-4 py-3 rounded-2xl flex items-center gap-3
-                   hover:scale-[1.02] transition-all duration-300 shadow-md cursor-pointer"
+              <div className="relative flex items-center [&>h3]:flex-1">
+                <AccordionTrigger className="group flex w-full items-center justify-between gap-3 px-4 py-4 pr-24 text-left text-base font-medium text-white hover:no-underline focus-visible:ring-2 focus-visible:ring-cyan-400/40 [&>svg]:hidden">
+                  <span className="flex-1">{item?.question}</span>
+                </AccordionTrigger>
+
+                {/* Right side: pin + arrow */}
+                <div className="pointer-events-none absolute right-3 flex items-center gap-1">
+                  <button
+                    type="button"
+                    aria-label={item?.isPinned ? "Unpin question" : "Pin question"}
+                    disabled={mutation.isPending}
+                    onClick={() => mutation.mutate(item._id)}
+                    className={`pointer-events-auto rounded-lg p-2 transition hover:bg-white/10 ${
+                      item?.isPinned
+                        ? "text-cyan-300"
+                        : "text-slate-400 hover:text-white"
+                    }`}
                   >
-                    <p className="flex-1 text-sm md:text-base lg:text-lg font-medium">
-                      {item?.question}
-                    </p>
-                    <div
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        togglePin(item._id);
-                      }}
-                      className="ml-auto cursor-pointer"
-                    >
-                      {item?.isPinned ? (
-                        <MdOutlinePushPin className="text-cyan-400 text-xl md:text-2xl" />
-                      ) : (
-                        <LuPinOff className="text-gray-300 text-lg md:text-xl" />
-                      )}
-                    </div>
-                  </AccordionTrigger>
-                  <AccordionContent className="w-full bg-[#e0f4ff]/20 text-gray-100 rounded-2xl p-4 mt-2 shadow-inner">
-                    <p className="text-sm md:text-base lg:text-lg">
-                      {item?.answer}
-                    </p>
-                  </AccordionContent>
-                </AccordionItem>
-              </Accordion>
-            </motion.div>
-          ))}
-        </AnimatePresence>
-      </div>
-    </LayoutGroup>
+                    {item?.isPinned ? (
+                      <Pin size={18} className="fill-current" />
+                    ) : (
+                      <PinOff size={18} />
+                    )}
+                  </button>
+                  <ChevronDown
+                    size={18}
+                    className="text-slate-400 transition-transform duration-200 group-data-[state=open]:rotate-180"
+                  />
+                </div>
+              </div>
+
+              <AccordionContent className="border-t border-white/10 px-4 pb-4 pt-3 text-slate-300">
+                <p className="leading-relaxed">{item?.answer}</p>
+              </AccordionContent>
+            </AccordionItem>
+          </motion.div>
+        ))}
+      </AnimatePresence>
+    </Accordion>
   );
 };
 

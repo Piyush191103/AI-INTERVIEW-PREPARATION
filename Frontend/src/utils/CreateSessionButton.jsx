@@ -1,11 +1,9 @@
-import { Button } from "@/components/ui/button";
-import React, { use } from "react";
 import axios from "axios";
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Dialog,
-  DialogClose,
   DialogContent,
   DialogDescription,
   DialogHeader,
@@ -13,83 +11,130 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
+import { Plus, Loader2 } from "lucide-react";
+
+const inputClass =
+  "w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2.5 text-white placeholder:text-slate-500 outline-none transition focus:border-cyan-400/60 focus:ring-2 focus:ring-cyan-400/20";
+
 const CreateSessionButton = () => {
-  const { register, handleSubmit, reset } = useForm();
+  const [open, setOpen] = useState(false);
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors },
+  } = useForm();
+  const queryClient = useQueryClient();
 
   const createSessionApi = async (formdata) => {
     const res = await axios.post(
       "http://localhost:5000/api/v1/session/createSession",
       formdata,
       {
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         withCredentials: true,
       }
     );
     return res;
   };
 
-  const queryclient = useQueryClient();
   const mutation = useMutation({
     mutationFn: createSessionApi,
-    onSuccess: (data) => {
-      // console.log(data)
+    onSuccess: () => {
       toast.success("Session Created");
-
       reset();
-      queryclient.invalidateQueries({ queryKey: ["session"] });
+      setOpen(false);
+      queryClient.invalidateQueries({ queryKey: ["session"] });
     },
     onError: (error) => {
-      alert(error);
+      toast.error(error.response?.data?.message || "Failed to create session");
     },
   });
 
   const SessionFormHandler = (formdata) => {
-    // console.log(formdata)
     mutation.mutate(formdata);
   };
-  return (
-    <Dialog>
-      <DialogTrigger className="fixed top-120 right-5 p-3 px-6 font-bold text-white bg-zinc-900 rounded-4xl text-[19px] cursor-pointer">
-        <h1>Create Session</h1>
-      </DialogTrigger>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Enter the details for your session</DialogTitle>
-          <form onSubmit={handleSubmit(SessionFormHandler)} action="">
-            <input
-              type="text"
-              {...register("role")}
-              placeholder="Enter your role"
-              className="outline-0 border-b border-black w-[35vw] my-[2vw]"
-            />
-            <input
-              type="number"
-              {...register("experience")}
-              placeholder="Enter your experience"
-              className="outline-0 border-b border-black w-[35vw] my-[2vw]"
-            />
-            <input
-              type="text"
-              {...register("topicsToFocus")}
-              placeholder="Enter topics to focus"
-              className="outline-0 border-b border-black w-[35vw] my-[2vw]"
-            />
-            <DialogClose asChild>
-              <button
-                type="submit"
-                className="px-3 py-2 bg-zinc-900 text-white rounded-2xl ml-[25vw] mb-5"
-              >
-                Create Session
-              </button>
-            </DialogClose>
-          </form>
 
-          <DialogDescription>
-            Please provide form details carefully
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <button className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-500 px-5 py-3 font-semibold text-white shadow-lg shadow-blue-500/30 transition hover:scale-105">
+          <Plus size={18} /> Create Session
+        </button>
+      </DialogTrigger>
+
+      <DialogContent className="border border-white/10 bg-[#0f1b3d] text-white sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="text-xl">New prep session</DialogTitle>
+          <DialogDescription className="text-slate-400">
+            Tell us about the role and we will generate questions for it.
           </DialogDescription>
         </DialogHeader>
+
+        <form onSubmit={handleSubmit(SessionFormHandler)} className="mt-2 space-y-4">
+          <div>
+            <label className="mb-1.5 block text-sm text-slate-300">Role</label>
+            <input
+              type="text"
+              placeholder="e.g. Frontend Developer"
+              className={inputClass}
+              {...register("role", { required: "Role is required" })}
+            />
+            {errors.role && (
+              <p className="mt-1 text-xs text-red-400">{errors.role.message}</p>
+            )}
+          </div>
+
+          <div>
+            <label className="mb-1.5 block text-sm text-slate-300">
+              Experience (years)
+            </label>
+            <input
+              type="number"
+              min="0"
+              placeholder="0 for fresher"
+              className={inputClass}
+              {...register("experience", { required: "Experience is required" })}
+            />
+            {errors.experience && (
+              <p className="mt-1 text-xs text-red-400">
+                {errors.experience.message}
+              </p>
+            )}
+          </div>
+
+          <div>
+            <label className="mb-1.5 block text-sm text-slate-300">
+              Topics to focus
+            </label>
+            <input
+              type="text"
+              placeholder="e.g. React, JavaScript, CSS"
+              className={inputClass}
+              {...register("topicsToFocus", { required: "Add at least one topic" })}
+            />
+            <p className="mt-1 text-xs text-slate-500">Separate topics with commas.</p>
+            {errors.topicsToFocus && (
+              <p className="mt-1 text-xs text-red-400">
+                {errors.topicsToFocus.message}
+              </p>
+            )}
+          </div>
+
+          <button
+            type="submit"
+            disabled={mutation.isPending}
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-500 py-3 font-semibold text-white shadow-lg shadow-blue-500/30 transition hover:opacity-90 disabled:opacity-60"
+          >
+            {mutation.isPending ? (
+              <>
+                <Loader2 size={16} className="animate-spin" /> Creating...
+              </>
+            ) : (
+              "Create Session"
+            )}
+          </button>
+        </form>
       </DialogContent>
     </Dialog>
   );

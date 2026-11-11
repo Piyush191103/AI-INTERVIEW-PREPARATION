@@ -8,6 +8,15 @@ export const generateInterviewQuestion = async (req, res) => {
   try {
     const { role, experience, topicsToFocus, sessionId } = req.body;
 
+    const session = await Session.findById(sessionId);
+    if (!session) {
+      return res.status(404).json({ message: "Session not found" });
+    }
+
+    // pehle se bane questions
+    const existingDocs = await Question.find({ session: sessionId }).select("question");
+    const existing = existingDocs.map((q) => q.question);
+
     const prompt = `
 You are an interview question generator.
 Return ONLY a valid JSON array. Do not include explanations, extra text, or formatting.
@@ -19,52 +28,56 @@ Example format:
 
 Now generate 5 questions for a ${role} with ${experience} years experience.
 Focus on topics: ${topicsToFocus}.
+
+Do NOT repeat or rephrase any of these existing questions:
+${JSON.stringify(existing)}
 `;
 
-    const model = ai.getGenerativeModel({ model: "gemini-2.5-flash" });
+    const model = ai.getGenerativeModel({ model: "gemini-3.8-flash" });
     const result = await model.generateContent(prompt);
 
     let rawText = result.response.text();
     rawText = rawText.replace(/```json|```/gi, "").trim();
-    const match = rawText.match(/\[([\s\S]*?)\]/);
+    const match = rawText.match(/\[[\s\S]*\]/);
     if (match) rawText = match[0];
 
     let data;
     try {
       data = JSON.parse(rawText);
-      // console.log("Parsed AI data:", data);
     } catch (err) {
       console.error("Failed to parse JSON:", rawText);
       return res.status(400).json({ message: "Invalid JSON from model" });
     }
 
-    const session = await Session.findById(sessionId);
-    if (!session) {
-      return res.status(404).json({ message: "Session not found" });
+    // duplicates hatao (case/punctuation ignore karke)
+    const normalize = (s) => s.toLowerCase().replace(/[^a-z0-9 ]/g, "").trim();
+    const seen = new Set(existing.map(normalize));
+    const fresh = data.filter((q) => {
+      const key = normalize(q.question || "");
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+
+    if (fresh.length === 0) {
+      return res.status(200).json({ message: "No new unique questions generated" });
     }
 
     const createdQuestions = await Question.insertMany(
-      data.map((q) => ({
+      fresh.map((q) => ({
         session: sessionId,
         question: q.question,
         answer: q.answer,
       }))
     );
 
-    // Agar session ke andar bhi questions ka reference chahiye:
-    if (session.questions) {
-      session.questions.push(...createdQuestions.map(q => q._id));
-      await session.save();
-    }
+    session.questions.push(...createdQuestions.map((q) => q._id));
+    await session.save();
 
-    return res.status(201).json({
-      message: "Questions created successfully",
-      
-    });
-
+    return res.status(201).json({ message: "Questions created successfully" });
   } catch (error) {
     console.error("Error in generateInterviewQuestion:", error);
-   
+    return res.status(500).json({ success: false, message: error.message });
   }
 };
 

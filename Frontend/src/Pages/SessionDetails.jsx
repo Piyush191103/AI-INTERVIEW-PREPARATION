@@ -1,15 +1,15 @@
 import AiQuestions from "@/utils/AiQuestions";
-import { useParams } from "react-router-dom";
+import { useParams, Link } from "react-router-dom";
 import axios from "axios";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import { ArrowLeft, Sparkles, Loader2 } from "lucide-react";
 
 const SessionDetails = () => {
   const param = useParams();
   const queryClient = useQueryClient();
 
-  // Fetch session details
   const getSessionDetail = async () => {
     const res = await axios.get(
       `http://localhost:5000/api/v1/session/getMySessionById/${param.id}`,
@@ -26,7 +26,6 @@ const SessionDetails = () => {
     queryFn: getSessionDetail,
   });
 
-  // Generate AI Questions mutation
   const GenerateAiQuestionApi = async (payload) => {
     const res = await axios.post(
       "http://localhost:5000/api/v1/question/addQuestion",
@@ -41,81 +40,121 @@ const SessionDetails = () => {
 
   const mutation = useMutation({
     mutationFn: GenerateAiQuestionApi,
-    onSuccess: (data) => {
+    onSuccess: () => {
       toast.success("AI Questions Generated");
       queryClient.invalidateQueries({ queryKey: ["sessionDetail", param.id] });
     },
     onError: (error) => {
       console.error("Mutation failed:", error.response?.data || error.message);
-      alert(error.response?.data?.message || "Something went wrong");
+      toast.error(error.response?.data?.message || "Something went wrong");
     },
   });
 
   const AiQuestion = () => {
-    const payload = {
+    if (mutation.isPending) return;
+    mutation.mutate({
       role: data?.session?.role,
       experience: data?.session?.experience,
       topicsToFocus: data?.session?.topicsToFocus,
       sessionId: param?.id,
-    };
-    mutation.mutate(payload);
+    });
   };
+
+  const session = data?.session;
+  const topics = String(session?.topicsToFocus || "")
+    .split(",")
+    .map((t) => t.trim())
+    .filter(Boolean);
+  const expLabel =
+    Number(session?.experience) === 0
+      ? "Fresher"
+      : `${session?.experience} yr${Number(session?.experience) > 1 ? "s" : ""} exp`;
 
   if (isLoading) {
     return (
-      <div className="w-full flex items-center justify-center h-[80vh]">
-        <h1 className="text-2xl md:text-3xl font-semibold text-gray-300">
-          Loading...
-        </h1>
+      <div className="min-h-[88vh] bg-gradient-to-b from-[#0b1226] via-[#111c3d] to-[#0f172a] px-4 py-10">
+        <div className="mx-auto max-w-3xl space-y-4">
+          <div className="h-36 animate-pulse rounded-2xl border border-white/10 bg-white/5" />
+          {[1, 2, 3].map((n) => (
+            <div
+              key={n}
+              className="h-16 animate-pulse rounded-xl border border-white/10 bg-white/5"
+            />
+          ))}
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="w-full flex flex-col items-center pt-10 px-4 md:px-10 gap-10 bg-gradient-to-b from-[#1a2540] via-[#24335a] to-[#1f2a4d] min-h-[88vh]">
-      {/* Session Info Card */}
-      <div className="w-full md:w-[70%] lg:w-[60%] bg-gradient-to-br from-[#2b3a6b] to-[#1f2a4d] rounded-3xl shadow-2xl p-6 flex flex-col gap-6 text-white">
-        <div className="flex flex-col md:flex-row md:justify-between gap-4">
-          <div className="flex flex-col gap-1">
-            <h2 className="text-xl md:text-2xl font-semibold text-cyan-400">
-              Role:
-            </h2>
-            <p className="text-lg md:text-xl font-medium">
-              {data?.session?.role}
-            </p>
+    <div className="min-h-[88vh] w-full bg-gradient-to-b from-[#0b1226] via-[#111c3d] to-[#0f172a] px-4 py-10 md:px-10">
+      <div className="mx-auto max-w-3xl">
+        <Link
+          to="/session"
+          className="mb-6 inline-flex items-center gap-2 text-sm text-slate-400 transition hover:text-cyan-300"
+        >
+          <ArrowLeft size={16} /> Back to sessions
+        </Link>
+
+        {/* Session info card */}
+        <div className="rounded-2xl border border-white/10 bg-white/5 p-6 backdrop-blur">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <p className="text-xs uppercase tracking-wider text-cyan-300">Role</p>
+              <h1 className="mt-1 text-3xl font-bold capitalize text-white">
+                {session?.role}
+              </h1>
+            </div>
+            <span className="rounded-full bg-cyan-400/10 px-3 py-1 text-sm font-medium text-cyan-300">
+              {expLabel}
+            </span>
           </div>
-          <div className="flex flex-col gap-1">
-            <h2 className="text-xl md:text-2xl font-semibold text-cyan-400">
-              Topic to Focus:
-            </h2>
-            <p className="text-lg md:text-xl font-medium">
-              {data?.session?.topicsToFocus}
+
+          <div className="mt-5">
+            <p className="mb-2 text-xs uppercase tracking-wider text-slate-400">
+              Topics to focus
             </p>
-          </div>
-          <div className="flex flex-col gap-1">
-            <h2 className="text-xl md:text-2xl font-semibold text-cyan-400">
-              Experience:
-            </h2>
-            <p className="text-lg md:text-xl font-medium">
-              {data?.session?.experience} years
-            </p>
+            <div className="flex flex-wrap gap-2">
+              {topics.map((topic) => (
+                <span
+                  key={topic}
+                  className="rounded-md border border-white/10 bg-white/5 px-2.5 py-1 text-sm text-slate-200"
+                >
+                  {topic}
+                </span>
+              ))}
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* AI Questions Section */}
-      <div className="w-full md:w-[70%] lg:w-[60%]">
+        {/* Questions header with generate button */}
+        <div className="mb-4 mt-10 flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-xl font-semibold text-white">
+            Interview questions
+            <span className="ml-2 text-sm font-normal text-slate-400">
+              ({session?.questions?.length || 0})
+            </span>
+          </h2>
+
+          <Button
+            onClick={AiQuestion}
+            disabled={mutation.isPending}
+            className="rounded-xl bg-gradient-to-r from-blue-600 to-cyan-500 px-5 font-semibold text-white shadow-lg shadow-blue-500/30 transition hover:scale-105 disabled:opacity-70 disabled:hover:scale-100"
+          >
+            {mutation.isPending ? (
+              <>
+                <Loader2 className="mr-2 animate-spin" size={16} /> Generating...
+              </>
+            ) : (
+              <>
+                <Sparkles className="mr-2" size={16} /> Generate AI Questions
+              </>
+            )}
+          </Button>
+        </div>
+
         <AiQuestions />
       </div>
-
-      {/* Generate AI Questions Button */}
-      <Button
-        onClick={AiQuestion}
-        disabled={mutation.isLoading}
-        className="bg-[#04317a] hover:bg-[#131d2c] mb-[5vw] text-white px-6 py-3 rounded-xl shadow-lg transition-all duration-300"
-      >
-        {mutation.isPending ? "Loading..." : "Generate AI Questions"}
-      </Button>
     </div>
   );
 };
